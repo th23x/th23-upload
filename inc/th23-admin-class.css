@@ -1,0 +1,115 @@
+/* plugin option page */
+.th23-admin-options h1 .icon {
+  width: auto;
+  height: 36px;
+}
+.th23-admin-options h2:nth-child(n+3) { /* options - section header */
+  margin-top: 2.5em;
+}
+.th23-admin-options .form-table .description { /* options - description */
+  display: block;
+}
+.th23-admin-options .th23-admin-screen-option-hide_description .description,
+.th23-admin-options .th23-admin-screen-option-hide_description .section-description { /* options - hide descriptions */
+  display: none;
+}
+.th23-admin-options .notice-description { /* options - notices within description */
+  display: block;
+  padding: 5px 10px;
+  font-size: 13px;
+}
+@media screen and (min-width: 783px) {
+  .th23-admin-options .child th { /* options - children (on bigger screens) */
+    width: 175px;
+    padding-left: 25px;
+  }
+  .th23-admin-options .sub-child th { /* options - sub-children (on bigger screens) */
+    width: 150px;
+    padding-left: 50px;
+  }
+}
+.th23-admin-options input + .unit,
+.th23-admin-options select + .unit {
+  margin-left: 0.25em;
+}
+.th23-admin-options div.option-template { /* options template - scroll if to wide */
+  overflow-x: auto;
+}
+.th23-admin-options table.option-template { /* options template - table */
+  margin-top: 1em;
+  border-collapse: collapse;
+}
+.th23-admin-options table.option-template th,
+.th23-admin-options table.option-template td {
+  border: 1px solid lightgray;
+  padding: 0.8em 0.5em;
+  text-align: center;
+}
+.th23-admin-options table.option-template th span.hint { /* options template - header descriptions */
+  border-bottom: 1px dotted gray;
+  cursor: help;
+}
+.th23-admin-options table.option-template input.regular-text { /* options template - input fields */
+  min-width: 7em;
+  width: 100%;
+}
+.th23-admin-options table.option-template tr[id$=-template] { /* option template - master input row */
+  display: none;
+}
+.th23-admin-options .shared { /* shared x-plugin */
+  width: 30px;
+  height: 30px;
+  cursor: pointer;
+}
+.th23-admin-options .shared:before {
+  line-height: 30px;
+  font-size: 24px;
+}
+@media screen and (max-width: 782px) {
+  .th23-admin-options .form-table td .shared-option + input {
+    display: inline-block;
+    max-width: calc(100% - 42px);
+  }
+  .th23-admin-options .shared {
+    width: 40px;
+    height: 40px;
+  }
+  .th23-admin-options .shared:before {
+    line-height: 40px;
+    font-size: 32px;
+  }
+}
+
+/* plugin information */
+div.th23-admin-about {
+  position: relative;
+  margin-top: 1.5em;
+  border: 1px solid #ccd0d4;
+  border-left: 4px solid #00a0d2;
+  box-shadow: 0 1px 1px 0 rgba(0, 0, 0, 0.1);
+  background-color: #ffffff;
+  padding: 1px 12px;
+}
+div.th23-admin-about .icon {
+  position: absolute;
+  top: calc(50% - 24px);
+  width: auto;
+  height: 48px;
+}
+div.th23-admin-about .icon + p {
+  margin-left: 64px;
+}
+@media screen and (min-width: 782px) {
+  div.th23-admin-about .floating-right {
+    float: right;
+  }
+  div.th23-admin-about .floating-right .separator-left {
+    display: none;
+  }
+}
+div.th23-admin-about .update-url {
+  cursor: pointer;
+}
+div.th23-admin-about a {
+  text-decoration: none;
+}

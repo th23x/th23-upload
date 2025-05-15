@@ -1,0 +1,154 @@
+/* plugin settings page and row actions in media gallery */
+.th23-upload-options,
+table.media .row-actions {
+
+	.success {
+		font-weight: bold;
+		color: #009100;
+	}
+
+	.error {
+		font-weight: bold;
+		color: #a00;
+	}
+
+	.blinking {
+		animation: th23-upload-blinking 1.2s infinite;
+
+		&.temp {
+			animation-iteration-count: 3;
+		}
+	}
+}
+@keyframes th23-upload-blinking {
+	0% { color: inherit; }
+    49% { color: inherit; }
+    60% { color: transparent; }
+    99% { color: transparent; }
+    100% { color: inherit; }
+}
+
+/* plugin settings page [watermarks_position] */
+.th23-upload-options .option-watermarks_position fieldset > div {
+
+	display: inline-grid;
+	grid-template-columns: repeat(3, 1fr);
+
+	& > div {
+		margin: 0 1px 1px 0;
+		background-color: lightgray;
+		padding: 4px 8px;
+		text-align: center;
+	}
+
+}
+
+/* plugin settings page [watermarks_image] */
+$watermarks_image-max-width: 300px;
+$watermarks_image-max-height: 100px;
+
+#th23-upload-watermark-image {
+	cursor: pointer;
+
+	& img {
+		max-width: $watermarks_image-max-width;
+		max-height: $watermarks_image-max-height;
+		height: auto;
+	}
+}
+
+#th23-upload-watermark-placeholder {
+	width: $watermarks_image-max-width;
+	border: 2px dashed #ccc;
+	background-color: #eee;
+	padding: 4em 1em;
+	text-align: center;
+}
+
+#th23-upload-watermark-selection {
+	margin-top: 10px;
+	max-width: $watermarks_image-max-width;
+	max-height: 400px;
+	overflow-y: scroll;
+	border: 1px solid #ccc;
+	background: #fff;
+	padding: 1em;
+}
+
+.th23-upload-watermark-item {
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	min-height: ($watermarks_image-max-height + 50px);
+
+	&:not(:first-of-type) {
+		border-top: 1px dashed gray;
+	}
+	&:last-of-type {
+		margin-bottom: 0;
+	}
+
+	& img {
+		max-width: ($watermarks_image-max-width - 100px);
+		max-height: $watermarks_image-max-height;
+		height: auto;
+		cursor: pointer;
+	}
+
+	& > div > div {
+		text-align: center;
+		font-size: 13px;
+
+		&.caption {
+			font-weight: bold;
+			font-style: italic;
+		}
+
+		&.delete {
+			cursor: pointer;
+
+			&:hover {
+				color: red;
+			}
+		}
+	}
+}
+
+#th23-upload-watermark-file {
+	position: absolute;
+	left: -9999px;
+	visibility: hidden;
+}
+
+/* plugin settings page [watermarks_mass_actions] */
+#th23-upload-mass-buttons .button-secondary.hidden {
+	display: none;
+}
+@media screen and (max-width: 782px) {
+	#th23-upload-mass-buttons .button-secondary {
+		display: block;
+		margin-bottom: 4px;
+	}
+}
+
+#th23-upload-mass-bar {
+	width: 100%;
+	background-color: lightgrey;
+	& > div {
+		width: 1%;
+		height: 20px;
+		background-color: green;
+	}
+}
+
+#th23-upload-mass-last {
+	max-height: 200px;
+	overflow-y: scroll;
+	background: white;
+
+	& > div {
+		margin: 5px;
+		padding-bottom: 5px;
+		border-bottom: 1px dashed lightgray;
+	}
+}
