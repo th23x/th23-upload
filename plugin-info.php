@@ -178,6 +178,15 @@ Honest answer: To limit complexity of the plugin ;-)',
 // changelog [mandatory]
 // note: sorted by version, content can be a string or an array for a list, at least info for current version must be present
 $plugin['changelog'] = array(
+	'v2.1.0' => array(
+		'enhancement: add columns to media gallery with option to re-attach/detach and to show/cleanup filesizes (previously separate th23 Media Gallery Extension plugin, but "close" to upload functionality)',
+		'enhancement: option to keep own backup upon upload / as soon as possible, prevent "dormant" copies of images upon usage of built-in image editor, properly use unmarked copy as input for image editor where required, restore original image',
+		'fix: improved css styling of some admin items not separated properly on smaller screens',
+		'fix: harmonize file paths in error messages, consistently based on WP root directory',
+		'fix: parent filter in media gallery',
+		'code: simplify image editor extension to maintain watermark size and position code only once',
+		'code: simplify various data handovers to/from JS'
+	),
 	'v2.0.0' => array(
 		'enhancement: major review and rewrite of code, based on th23 Admin class',
 		'enhancement: switch to full Open Source licence, including previously separate add-on for watermarking',
@@ -215,6 +224,7 @@ $plugin['changelog'] = array(
 // upgrade_notice [mandatory]
 // note: sorted by version, content can be a string or an array for a list, at least info for current version must be present
 $plugin['upgrade_notice'] = array(
+	'v2.1.0' => 'introduces new setting, properly use updater',
 	'v2.0.0' => 'n/a',
 	'v1.6.0' => 'n/a',
 	'v1.4.0' => 'n/a',

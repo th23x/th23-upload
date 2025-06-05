@@ -2,7 +2,7 @@ jQuery(document).ready(function($){
 
 	// Media Library: Add / remove watermark for an attachment
 	let locked = [];
-	$('a.th23-upload-admin-watermark').click(function(e) {
+	$('a.th23-upload-watermark').click(function(e) {
 
 		e.preventDefault();
 		e.stopPropagation();
@@ -24,10 +24,9 @@ jQuery(document).ready(function($){
 		$(this).html('<span class="blinking">' + $(this).attr('data-wait') + '</span>');
 
 		const data = {
-			action: 'th23_upload_watermark',
+			action: $(this).attr('data-action'),
 			nonce: $(this).attr('data-nonce'),
 			id: attachment_id,
-			do: $(this).attr('data-do'),
 		};
 		// make $(this) accessible upon response
 		const item = $(this);
@@ -38,7 +37,7 @@ jQuery(document).ready(function($){
 				// 3 seconds after success, reset attachment actions visibility, change action link, unlock to be used again
 				setTimeout(function(){
 					row_actions.css({ 'position': '' });
-					item.attr('data-do', r.do);
+					item.attr('data-action', r.action);
 					item.attr('data-wait', r.wait);
 					item.html(r.html);
 					const pos = locked.indexOf(attachment_id);
@@ -51,6 +50,81 @@ jQuery(document).ready(function($){
 			}
 		});
 
+	});
+
+	// Media Library: Refresh filesize, cleanup images
+	$('a.th23-upload-filesize, a.th23-upload-cleanup').click(function(e) {
+
+		e.preventDefault();
+		e.stopPropagation();
+		$(this).blur();
+
+		const attachment_id = $(this).attr('data-attachment');
+
+		// keep attachment actions visible during execution
+		const row_actions = $(this).closest('.row-actions');
+		row_actions.css({ 'position': 'initial' });
+
+		// show waiting text
+		$(this).html('<span class="blinking">' + $(this).attr('data-wait') + '</span>');
+
+		const data = {
+			action: $(this).attr('data-action'),
+			nonce: $(this).attr('data-nonce'),
+			id: attachment_id,
+		};
+		// make $(this) accessible upon response
+		const item = $(this);
+		$.post(ajaxurl, data, function(r) {
+			if(r.result == 'success') {
+				// update filesize
+				item.closest('td').find('.th23-upload-filesize-field').html(r.size);
+				// show success message
+				item.html('<span class="success">' + r.msg + '</span>');
+				// 3 seconds after success, reset attachment actions visibility, change action link, unlock to be used again
+				setTimeout(function(){
+					row_actions.css({ 'position': '' });
+					item.attr('data-wait', r.wait);
+					item.html(r.html);
+				}, 3000);
+			}
+			else {
+				// show error
+				item.html('<span class="error"><span class="blinking">' + r.msg + '</span></span>');
+			}
+		});
+
+	});
+
+	// Post / Attachment Edit: Refresh attachment image on page load and after image edit
+	let image_src = function() {
+		let image = $(this).parents('.wp_attachment_image').find('img.thumbnail');
+		image.attr('src', image.attr('src').split('?')[0] + '?' + new Date().getTime());
+	}
+	$('input[id^="imgedit-open-btn-"]').each(image_src).focus(image_src);
+
+	// Post / Attachment Edit: Handle image restore
+	$('#th23-upload-restore').click(function(e) {
+		e.preventDefault();
+		$(this).blur();
+		$('#th23-upload-restore-select').toggleClass('hidden').find('img').attr('src', $(this).attr('data-img-src'));
+	});
+	$('#th23-upload-restore-do').click(function() {
+		const data = {
+			action: 'th23_upload_restore',
+			nonce: $(this).attr('data-nonce'),
+			id: $(this).attr('data-attachment'),
+		};
+		$.post(ajaxurl, data, function(r) {
+			console.log(r);
+			if(r.result == 'success') {
+				location.reload(true);
+			}
+			else {
+				// show error
+				$('#th23-upload-restore-select').html('<span class="error"><span class="blinking">' + r.msg + '</span></span>');
+			}
+		});
 	});
 
 	// Plugin Settings: Handle watermark image selection
@@ -81,10 +155,9 @@ jQuery(document).ready(function($){
 	$('#th23-upload-watermark-file').on('change', function(e) {
 		// note: use FormData to properly handle file upload
 		let form_data = new FormData();
-		form_data.append('action', 'th23_upload_watermark');
+		form_data.append('action', 'th23_upload_watermark_upload');
 		form_data.append('nonce', $('#th23-upload-watermark-nonce').val());
 		form_data.append('file', $(this).prop('files')[0]);
-		form_data.append('do', 'upload');
 		$.ajax({
 			url: ajaxurl,
 			type: 'post',
@@ -123,10 +196,9 @@ jQuery(document).ready(function($){
 		// make file accessible upon response
 		const file = $(this).attr('data-file');
 		const data = {
-			action: 'th23_upload_watermark',
+			action: 'th23_upload_watermark_delete',
 			nonce: $('#th23-upload-watermark-nonce').val(),
 			file: file,
-			do: 'delete',
 		};
 		// make $(this) accessible upon response
 		const item = $(this);
@@ -148,17 +220,16 @@ jQuery(document).ready(function($){
 		});
 	});
 
-	// Plugin Settings: Mass actions for add/remove watermark to all attachments
+	// Plugin Settings: Mass actions for add/remove watermark to all attachments or clean up dormant image files
 	let attachments, len, action, nonce, i, stop;
 	// trigger ajax call
 	function trigger_ajax() {
 		if(i < len && stop != 1) {
 			// call ajax
 			const data = {
-				action: 'th23_upload_watermark',
+				action: action,
 				nonce: nonce,
 				id: attachments[i],
-				do: action,
 			};
 			$.post(ajaxurl, data, function(r) {
 				// update progress bar

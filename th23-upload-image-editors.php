@@ -8,17 +8,39 @@ if(!defined('ABSPATH')) {
 // Imagick specific additions to Image Editor
 class th23_image_editor_imagick extends WP_Image_Editor_Imagick {
 
-	// Parent Image Editor functions required, thus embedded "transparently" in extension
-	public static function test( $args = [] ) { return parent::test( $args ); }
-    public static function supports_mime_type( $mime_type ) { return parent::supports_mime_type( $mime_type ); }
+	// Image Editor functions required, ie checked for existence and thus embedded "transparently" in extension
+	public static function test($args = array()) { return parent::test($args); }
+	public static function supports_mime_type($mime_type) { return parent::supports_mime_type($mime_type); }
+
+	// Load image into editor (extension)
+	public function __construct($file) {
+		global $th23_upload;
+		if(empty($th23_upload)) {
+			return new WP_Error('th23_upload_image_editor', __('Failed to load image editor, main plugin missing', 'th23-upload'));
+		}
+		$th23_upload->data['file_opened'] = $file;
+		// use unmarked version as basis
+		// note: _no-watermark file will not be overwritten, as -e{13} is added to filename
+		if(is_file($unmarked = $th23_upload->str_lreplace('.', '_no-watermark.', $file))) {
+			$file = $unmarked;
+		}
+		// trigger handling of backups and watermarks after saving new image version
+		add_action('updated_postmeta', array(&$th23_upload, 'edit_image'), 10, 4);
+		$th23_upload->data['file_used'] = $file;
+		parent::__construct($file);
+	}
+
+	// Save image edited (extension)
+	// note: saving (updated) attachment meta data happens after "save" is executed
+	public function save($destfilename = null, $mime_type = null) {
+		global $th23_upload;
+		$th23_upload->data['file_edited'] = $destfilename;
+		return parent::save($destfilename, $mime_type);
+	}
 
 	// Add watermark to image
 	public function th23_upload_add_watermark($watermark_src) {
-
 		global $th23_upload;
-		if(empty($th23_upload)) {
-			return;
-		}
 
 		try {
 			// get watermark image
@@ -28,22 +50,12 @@ class th23_image_editor_imagick extends WP_Image_Editor_Imagick {
 			$watermark_width = $watermark->getImageWidth();
 			$watermark_height = $watermark->getImageHeight();
 		} catch (ImagickException $e) {
-			$th23_upload->log('Imagick failed to open watermark "' . $watermark_src . '"');
+			$th23_upload->log('Imagick failed to open watermark "/' . esc_attr(str_replace(ABSPATH, '', $watermark_src)) . '"');
 			return false;
 		}
 
-		// ensure maxcover between 1 to 100 (%)
-		$maxcover = (int) $th23_upload->options['watermarks_maxcover'];
-		if($maxcover < 1 || $maxcover > 100) {
-			$maxcover = 100;
-		}
-
-		// get distance to keep from image border
-		$padding = (int) $th23_upload->options['watermarks_padding'];
-
-		// calculate max watermark size
-		$max_width = round(($this->size['width'] - (2 * $padding)) * $maxcover / 100);
-		$max_height = round(($this->size['height'] - (2 * $padding)) * $maxcover / 100);
+		// get watermark size
+		list($maxcover, $padding, $max_width, $max_height) = $th23_upload->watermark_size($this->size['width'], $this->size['height']);
 
 		// resize watermark, if needed
 		try {
@@ -61,49 +73,8 @@ class th23_image_editor_imagick extends WP_Image_Editor_Imagick {
 			$th23_upload->log('Imagick failed to resize watermark, using original size');
 		}
 
-		// ensure position between 1 (top left) to 9 (bottom right, default)
-		$position = (int) $th23_upload->options['watermarks_position'];
-		if($position < 1 || $position > 9) {
-			$position = 9;
-		}
-
-		// determine coordinates of watermark on image
-		if(1 == $position) {
-			$x = 0 + $padding;
-			$y = 0 + $padding;
-		}
-		elseif(2 == $position) {
-			$x = round(($this->size['width'] / 2) - ($watermark_width / 2));
-			$y = 0 + $padding;
-		}
-		elseif(3 == $position) {
-			$x = $this->size['width'] - $padding - $watermark_width;
-			$y = 0 + $padding;
-		}
-		elseif(4 == $position) {
-			$x = 0 + $padding;
-			$y = round(($this->size['height'] / 2) - ($watermark_height / 2));
-		}
-		elseif(5 == $position) {
-			$x = round(($this->size['width'] / 2) - ($watermark_width / 2));
-			$y = round(($this->size['height'] / 2) - ($watermark_height / 2));
-		}
-		elseif(6 == $position) {
-			$x = $this->size['width'] - $padding - $watermark_width;
-			$y = round(($this->size['height'] / 2) - ($watermark_height / 2));
-		}
-		elseif(7 == $position) {
-			$x = 0 + $padding;
-			$y = $this->size['height'] - $watermark_height - $padding;
-		}
-		elseif(8 == $position) {
-			$x = round(($this->size['width'] / 2) - ($watermark_width / 2));
-			$y = $this->size['height'] - $watermark_height - $padding;
-		}
-		elseif(9 == $position) {
-			$x = $this->size['width'] - $padding - $watermark_width;
-			$y = $this->size['height'] - $watermark_height - $padding;
-		}
+		// get watermark position
+		list($x, $y) = $th23_upload->watermark_position($this->size['width'], $this->size['height'], $watermark_width, $watermark_height, $padding);
 
 		// place watermark on image
 		try {
@@ -124,17 +95,39 @@ class th23_image_editor_imagick extends WP_Image_Editor_Imagick {
 // GD specific additions to Image Editor
 class th23_image_editor_gd extends WP_Image_Editor_GD {
 
-	// Parent Image Editor functions required, thus embedded "transparently" in extension
-	public static function test( $args = [] ) { return parent::test( $args ); }
-    public static function supports_mime_type( $mime_type ) { return parent::supports_mime_type( $mime_type ); }
+	// Image Editor functions required, ie checked for existence and thus embedded "transparently" in extension
+	public static function test($args = array()) { return parent::test($args); }
+	public static function supports_mime_type($mime_type) { return parent::supports_mime_type($mime_type); }
+
+	// Load image into editor (extension)
+	public function __construct($file) {
+		global $th23_upload;
+		if(empty($th23_upload)) {
+			return new WP_Error('th23_upload_image_editor', __('Failed to load image editor, main plugin missing', 'th23-upload'));
+		}
+		$th23_upload->data['file_opened'] = $file;
+		// use unmarked version as basis
+		// note: _no-watermark file will not be overwritten, as -e{13} is added to filename
+		if(is_file($unmarked = $th23_upload->str_lreplace('.', '_no-watermark.', $file))) {
+			$file = $unmarked;
+		}
+		// trigger handling of backups and watermarks after saving new image version
+		add_action('updated_postmeta', array(&$th23_upload, 'edit_image'), 10, 4);
+		$th23_upload->data['file_used'] = $file;
+		parent::__construct($file);
+	}
+
+	// Save image edited (extension)
+	// note: saving (updated) attachment meta data happens after "save" is executed
+	public function save($destfilename = null, $mime_type = null) {
+		global $th23_upload;
+		$th23_upload->data['file_edited'] = $destfilename;
+		return parent::save($destfilename, $mime_type);
+	}
 
 	// Add watermark onto image
 	public function th23_upload_add_watermark($watermark_src) {
-
 		global $th23_upload;
-		if(empty($th23_upload)) {
-			return;
-		}
 
 		// get watermark information
 		if(empty($watermark_info = getimagesize($watermark_src))) {
@@ -169,18 +162,8 @@ class th23_image_editor_gd extends WP_Image_Editor_GD {
 			return false;
 		}
 
-		// ensure maxcover between 1 to 100 (%)
-		$maxcover = (int) $th23_upload->options['watermarks_maxcover'];
-		if($maxcover < 1 || $maxcover > 100) {
-			$maxcover = 100;
-		}
-
-		// get distance to keep from image border
-		$padding = (int) $th23_upload->options['watermarks_padding'];
-
-		// calculate max watermark size
-		$max_width = round(($this->size['width'] - (2 * $padding)) * $maxcover / 100);
-		$max_height = round(($this->size['height'] - (2 * $padding)) * $maxcover / 100);
+		// get watermark size
+		list($maxcover, $padding, $max_width, $max_height) = $th23_upload->watermark_size($this->size['width'], $this->size['height']);
 
 		// determine need to resize and scale to use - keeping aspect ratio
 		$scale = 1;
@@ -226,49 +209,8 @@ class th23_image_editor_gd extends WP_Image_Editor_GD {
 		// free up memory
 		imagedestroy($watermark);
 
-		// ensure position between 1 (top left) to 9 (bottom right, default)
-		$position = (int) $th23_upload->options['watermarks_position'];
-		if($position < 1 || $position > 9) {
-			$position = 9;
-		}
-
-		// determine coordinates of watermark on image
-		if(1 == $position) {
-			$x = 0 + $padding;
-			$y = 0 + $padding;
-		}
-		elseif(2 == $position) {
-			$x = round(($this->size['width'] / 2) - ($watermark_width / 2));
-			$y = 0 + $padding;
-		}
-		elseif(3 == $position) {
-			$x = $this->size['width'] - $padding - $watermark_width;
-			$y = 0 + $padding;
-		}
-		elseif(4 == $position) {
-			$x = 0 + $padding;
-			$y = round(($this->size['height'] / 2) - ($watermark_height / 2));
-		}
-		elseif(5 == $position) {
-			$x = round(($this->size['width'] / 2) - ($watermark_width / 2));
-			$y = round(($this->size['height'] / 2) - ($watermark_height / 2));
-		}
-		elseif(6 == $position) {
-			$x = $this->size['width'] - $padding - $watermark_width;
-			$y = round(($this->size['height'] / 2) - ($watermark_height / 2));
-		}
-		elseif(7 == $position) {
-			$x = 0 + $padding;
-			$y = $this->size['height'] - $watermark_height - $padding;
-		}
-		elseif(8 == $position) {
-			$x = round(($this->size['width'] / 2) - ($watermark_width / 2));
-			$y = $this->size['height'] - $watermark_height - $padding;
-		}
-		elseif(9 == $position) {
-			$x = $this->size['width'] - $padding - $watermark_width;
-			$y = $this->size['height'] - $watermark_height - $padding;
-		}
+		// get watermark position
+		list($x, $y) = $th23_upload->watermark_position($this->size['width'], $this->size['height'], $watermark_width, $watermark_height, $padding);
 
 		// place watermark on image
 		if('image/jpeg' != $watermark_mime) {

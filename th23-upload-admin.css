@@ -1,20 +1,24 @@
-/* plugin settings page and row actions in media gallery */
+/* overall */
 .th23-upload-options .success,
-table.media .row-actions .success {
+table.media .row-actions .success,
+#th23-upload-restore-select .success {
   font-weight: bold;
   color: #009100;
 }
 .th23-upload-options .error,
-table.media .row-actions .error {
+table.media .row-actions .error,
+#th23-upload-restore-select .error {
   font-weight: bold;
   color: #a00;
 }
 .th23-upload-options .blinking,
-table.media .row-actions .blinking {
+table.media .row-actions .blinking,
+#th23-upload-restore-select .blinking {
   animation: th23-upload-blinking 1.2s infinite;
 }
 .th23-upload-options .blinking.temp,
-table.media .row-actions .blinking.temp {
+table.media .row-actions .blinking.temp,
+#th23-upload-restore-select .blinking.temp {
   animation-iteration-count: 3;
 }
 
@@ -35,7 +39,41 @@ table.media .row-actions .blinking.temp {
     color: inherit;
   }
 }
-/* plugin settings page [watermarks_position] */
+/* media gallery: columns */
+.fixed .column-filesize {
+  width: 10%;
+}
+.fixed .column-attached_to {
+  width: 25%;
+}
+
+td.column-filesize p,
+td.column-attached_to p {
+  margin: 6px 0 0.2em;
+}
+
+/* edit attachment page: [watermarks_restore] */
+.compat-field-th23_upload_restore th, .compat-field-th23_upload_restore td {
+  display: block;
+}
+
+#th23-upload-restore-select {
+  position: relative;
+  margin: 0.5em 0;
+}
+#th23-upload-restore-select img {
+  max-width: 300px;
+  max-height: 300px;
+}
+
+#th23-upload-restore-do {
+  position: absolute;
+  left: 50%;
+  bottom: 10px;
+  transform: translateX(-50%);
+}
+
+/* plugin settings page: [watermarks_position] */
 .th23-upload-options .option-watermarks_position fieldset > div {
   display: inline-grid;
   grid-template-columns: repeat(3, 1fr);
@@ -47,7 +85,7 @@ table.media .row-actions .blinking.temp {
   text-align: center;
 }
 
-/* plugin settings page [watermarks_image] */
+/* plugin settings page: [watermarks_image] */
 #th23-upload-watermark-image {
   cursor: pointer;
 }
@@ -79,6 +117,7 @@ table.media .row-actions .blinking.temp {
   display: flex;
   justify-content: center;
   align-items: center;
+  text-align: center;
   min-height: 150px;
 }
 .th23-upload-watermark-item:not(:first-of-type) {
@@ -114,17 +153,16 @@ table.media .row-actions .blinking.temp {
   visibility: hidden;
 }
 
-/* plugin settings page [watermarks_mass_actions] */
-#th23-upload-mass-buttons .button-secondary.hidden {
+/* plugin settings page: [watermarks_mass_actions] */
+#th23-upload-mass-buttons .button-secondary,
+#th23-upload-mass-progress .button-secondary {
+  margin-bottom: 4px;
+}
+#th23-upload-mass-buttons .button-secondary.hidden,
+#th23-upload-mass-progress .button-secondary.hidden {
   display: none;
 }
 
-@media screen and (max-width: 782px) {
-  #th23-upload-mass-buttons .button-secondary {
-    display: block;
-    margin-bottom: 4px;
-  }
-}
 #th23-upload-mass-bar {
   width: 100%;
   background-color: lightgrey;

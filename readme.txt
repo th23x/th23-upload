@@ -3,8 +3,8 @@ Contributors: th23
 Donate link: https://github.com/th23x/th23-upload
 Tags: upload, watermark, image, resize
 Requires at least: 4.2
-Tested up to: 6.8.1
-Stable tag: 2.0.0
+Tested up to: 6.8
+Stable tag: 2.1.0
 Requires PHP: 8.0
 License: GPL-3.0
 License URI: https://github.com/th23x/th23-upload/blob/main/LICENSE
@@ -96,6 +96,16 @@ Honest answer: To limit complexity of the plugin ;-)
 
 == Changelog ==
 
+= v2.1.0 =
+
+* enhancement: add columns to media gallery with option to re-attach/detach and to show/cleanup filesizes (previously separate th23 Media Gallery Extension plugin, but "close" to upload functionality)
+* enhancement: option to keep own backup upon upload / as soon as possible, prevent "dormant" copies of images upon usage of built-in image editor, properly use unmarked copy as input for image editor where required, restore original image
+* fix: improved css styling of some admin items not separated properly on smaller screens
+* fix: harmonize file paths in error messages, consistently based on WP root directory
+* fix: parent filter in media gallery
+* code: simplify image editor extension to maintain watermark size and position code only once
+* code: simplify various data handovers to/from JS
+
 = v2.0.0 =
 
 * enhancement: major review and rewrite of code, based on th23 Admin class
@@ -137,6 +147,10 @@ Honest answer: To limit complexity of the plugin ;-)
 
 
 == Upgrade Notice ==
+
+= v2.1.0 =
+
+* introduces new setting, properly use updater
 
 = v2.0.0 =
 

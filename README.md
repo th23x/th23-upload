@@ -1,4 +1,4 @@
-# <img alt="th23 Upload" src="https://raw.githubusercontent.com/th23x/th23-upload/refs/heads/main/assets/icon-horizontal.png?v=2.0.0" width="200">
+# <img alt="th23 Upload" src="https://raw.githubusercontent.com/th23x/th23-upload/refs/heads/main/assets/icon-horizontal.png?v=2.1.0" width="200">
 
 Resize images on upload to maximum dimensions, saving space and bandwidth. Watermark images upon upload or manually via Media Library
 
@@ -21,12 +21,12 @@ Additionally th23 Upload offers some further options:
 * Select **location of watermark** on the image and maximum width/height to cover
 * Supports **GD Library** and **ImageMagick (Imagick)**
 
-> <img alt="" title="Plugin settings (maximum image upload size)" src="https://raw.githubusercontent.com/th23x/th23-upload/refs/heads/main/assets/screenshot-1.jpg?v=2.0.0" width="400">
-> <img alt="" title="Media uploader" src="https://raw.githubusercontent.com/th23x/th23-upload/refs/heads/main/assets/screenshot-2.jpg?v=2.0.0" width="400">
-> <img alt="" title="Media library (add/remove watermarks)" src="https://raw.githubusercontent.com/th23x/th23-upload/refs/heads/main/assets/screenshot-3.jpg?v=2.0.0" width="400">
-> <img alt="" title="Watermarked image (bottom right corner)" src="https://raw.githubusercontent.com/th23x/th23-upload/refs/heads/main/assets/screenshot-4.jpg?v=2.0.0" width="400">
-> <img alt="" title="Watermark settings (part 1)" src="https://raw.githubusercontent.com/th23x/th23-upload/refs/heads/main/assets/screenshot-5.jpg?v=2.0.0" width="400">
-> <img alt="" title="Watermark settings (part 2)" src="https://raw.githubusercontent.com/th23x/th23-upload/refs/heads/main/assets/screenshot-6.jpg?v=2.0.0" width="400">
+> <img alt="" title="Plugin settings (maximum image upload size)" src="https://raw.githubusercontent.com/th23x/th23-upload/refs/heads/main/assets/screenshot-1.jpg?v=2.1.0" width="400">
+> <img alt="" title="Media uploader" src="https://raw.githubusercontent.com/th23x/th23-upload/refs/heads/main/assets/screenshot-2.jpg?v=2.1.0" width="400">
+> <img alt="" title="Media library (add/remove watermarks)" src="https://raw.githubusercontent.com/th23x/th23-upload/refs/heads/main/assets/screenshot-3.jpg?v=2.1.0" width="400">
+> <img alt="" title="Watermarked image (bottom right corner)" src="https://raw.githubusercontent.com/th23x/th23-upload/refs/heads/main/assets/screenshot-4.jpg?v=2.1.0" width="400">
+> <img alt="" title="Watermark settings (part 1)" src="https://raw.githubusercontent.com/th23x/th23-upload/refs/heads/main/assets/screenshot-5.jpg?v=2.1.0" width="400">
+> <img alt="" title="Watermark settings (part 2)" src="https://raw.githubusercontent.com/th23x/th23-upload/refs/heads/main/assets/screenshot-6.jpg?v=2.1.0" width="400">
 
 
 ## ⚙️ Setup

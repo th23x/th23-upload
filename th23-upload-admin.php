@@ -65,17 +65,44 @@ class th23_upload_admin extends th23_upload {
 		// Add link to additional size and upload settings on Settings / Media page
 		add_action('admin_init', array(&$this, 'add_media_settings'));
 
-		// -- Watermark --
+		// Add restore button for (editable) images on attachment edit screen (AJAX)
+		add_filter('attachment_fields_to_edit', array(&$this, 'restore_attachment'), 10, 2);
+		add_action('admin_init', array(&$this, 'restore_attachment_image'));
+		add_action('wp_ajax_th23_upload_restore', array(&$this, 'ajax_restore_attachment'));
 
-		// Remove unmarked copy of image upon attachment deletion
-		add_action('delete_attachment', array(&$this, 'delete_unmarked'));
+		// Remove unmarked and original copy of image upon attachment deletion
+		add_action('delete_attachment', array(&$this, 'delete_backups'));
 
-		// Handle watermarking (AJAX)
-		add_action('wp_ajax_th23_upload_watermark', array(&$this, 'ajax_watermark'));
+		// Handle watermarks (AJAX)
+		add_action('wp_ajax_th23_upload_watermark_upload', array(&$this, 'ajax_watermark_upload'));
+		add_action('wp_ajax_th23_upload_watermark_delete', array(&$this, 'ajax_watermark_delete'));
+		add_action('wp_ajax_th23_upload_watermark_add', array(&$this, 'ajax_watermark_add'));
+		add_action('wp_ajax_th23_upload_watermark_remove', array(&$this, 'ajax_watermark_remove'));
 
 		// Mark / unmark image attachments in Media Library (overview page)
 		// todo: add remove / add watermark on edit attachment page and media popup eg via added field or in own tab - see "get_attachment_fields_to_edit" function and "attachment_fields_to_edit" hook
 		add_filter('media_row_actions', array(&$this, 'add_watermark_actions'), 10, 2);
+
+		// -- Media Library --
+
+		// Add link to filtered attachments in row actions on posts / pages overview
+		add_filter('post_row_actions', array(&$this, 'add_media_link'), 10, 2);
+		add_filter('page_row_actions', array(&$this, 'add_media_link'), 10, 2);
+
+		// Add filter to display only attachments of specified parent post / page in media library
+		add_filter('posts_where', array(&$this, 'filter_apply'));
+		add_action('restrict_manage_posts', array(&$this, 'filter_show'));
+		add_action('post_updated', array(&$this, 'filter_cache'), 10, 3);
+		add_action('save_post_attachment', array(&$this, 'filter_cache'), 10, 3);
+
+		// Enhance default "attached to" column and add "filesize" column in media library
+		add_filter('manage_media_columns', array(&$this, 'media_columns'));
+		add_filter('manage_upload_sortable_columns', array(&$this, 'media_columns_sortable'));
+		add_filter('request', array(&$this, 'media_columns_orderby'));
+		add_action('manage_media_custom_column', array(&$this, 'media_columns_content'), 10, 2);
+		add_action('updated_postmeta', array(&$this, 'filesize_cache'), 10, 3);
+		add_action('wp_ajax_th23_upload_filesize', array(&$this, 'ajax_filesize_cleanup'));
+		add_action('wp_ajax_th23_upload_cleanup', array(&$this, 'ajax_cleanup'));
 
 	}
 
@@ -210,13 +237,16 @@ class th23_upload_admin extends th23_upload {
 		// watermarks
 
 		$section_description = __('Adding watermarks to images to ensure they can be identified belonging to this site.', 'th23-upload');
-		$section_description .= '<br />' . __('Note: All setting changes only apply to newly uploaded images and their auto-generated sizes', 'th23-upload');
+		$section_description .= '<br />' . __('Note: All setting changes only apply to newly uploaded or edited images and their auto-generated sizes', 'th23-upload');
+
+		$description = __('Warning: Do not modify watermarked images in the built-in image editor - remove watermark first, edit image and re-add watermark afterwards!', 'th23-upload');
+		$description .= '<br />' . __('Note: A copy of your originally uploaded image with maximum allowed dimensions is kept unaccessible to users, so you can restore an unmarked version later. Auto-generated unscaled / unrotated copies of your uploaded images will not be kept, as these would otherwise be accessible without watermark.', 'th23-upload');
 
 		$this->plugin['options']['watermarks'] = array(
 			'section' => __('Watermark', 'th23-upload'),
 			'section_description' => $section_description,
 			'title' => __('Enable watermarks', 'th23-upload'),
-			'description' => __('Note: A copy of your originally uploaded image with maximum allowed dimensions is kept unaccessible to users, so you can restore an unmarked version later. Auto-generated unscaled / unrotated copies of your uploaded images will not be kept, as these would otherwise be accessible without watermark.', 'th23-upload'),
+			'description' => $description,
 			'element' => 'checkbox',
 			'default' => array(
 				'single' => 0,
@@ -224,7 +254,7 @@ class th23_upload_admin extends th23_upload {
 				1 => __('Add watermarks to JPG attachments', 'th23-upload'),
 			),
 			'attributes' => array(
-				'data-childs' => '.option-watermarks_upload,.option-watermarks_sizes,.option-watermarks_image,.option-watermarks_position,.option-watermarks_padding,.option-watermarks_maxcover,.option-watermarks_mass_actions',
+				'data-childs' => '.option-watermarks_upload,.option-watermarks_restore,.option-watermarks_sizes,.option-watermarks_image,.option-watermarks_position,.option-watermarks_padding,.option-watermarks_maxcover,.option-watermarks_mass_actions',
 			),
 			'save_after' => 'recheck_requirements',
 		);
@@ -239,6 +269,22 @@ class th23_upload_admin extends th23_upload {
 				'single' => 1,
 				0 => '',
 				1 => __('Automatically apply watermark upon upload', 'th23-upload'),
+			),
+		);
+
+		// watermarks_restore
+
+		$description = __('Disable default backup of images upon editing, to ensure no unmarked images are accessible', 'th23-upload');
+		$description .= '<br />' . __('Important: This also affects images not watermarked and prevents "dormant" additional files ending in "-e1234567890123" taking up unnecessary space.', 'th23-upload');
+
+		$this->plugin['options']['watermarks_restore'] = array(
+			'title' => __('Restore', 'th23-upload'),
+			'description' => $description,
+			'element' => 'checkbox',
+			'default' => array(
+				'single' => 1,
+				0 => '',
+				1 => __('Disable default image revisions', 'th23-upload'),
 			),
 		);
 
@@ -271,7 +317,6 @@ class th23_upload_admin extends th23_upload {
 		}
 
 		// watermarks_image
-		// todo: inlcude checks for format (PNG, mime type?) and size / dimensions (?)
 
 		$description = __('Click to select image used as watermark', 'th23-upload');
 		$description .= '<br />' . __('Note: Ideally PNG file with transparent background and not too big in size / dimensions', 'th23-upload');
@@ -448,9 +493,22 @@ class th23_upload_admin extends th23_upload {
 		// mass action buttons
 		$nonce = wp_create_nonce('th23-upload-nonce');
 		$html .= '<div id="th23-upload-mass-trigger">';
-		$html .= '<div id="th23-upload-mass-buttons"><input type="button" class="button-secondary" value="' . esc_attr__('Watermark all JPG attachments', 'th23-upload') . '" data-action="add" data-nonce="' . esc_attr($nonce) . '" /> <input type="button" class="button-secondary" value="' . esc_attr__('Remove watermark from all JPG attachments', 'th23-upload') . '" data-action="remove" data-nonce="' . esc_attr($nonce) . '" /></div>';
+		$html .= '<div id="th23-upload-mass-buttons">';
+		$html .= '<input type="button" class="button-secondary" value="' . esc_attr__('Watermark all JPG attachments', 'th23-upload') . '" data-action="th23_upload_watermark_add" data-nonce="' . esc_attr($nonce) . '" /> ';
+		$html .= '<input type="button" class="button-secondary" value="' . esc_attr__('Remove watermark from all JPG attachments', 'th23-upload') . '" data-action="th23_upload_watermark_remove" data-nonce="' . esc_attr($nonce) . '" /> ';
+		if(!empty($this->options['watermarks_restore'])) {
+			$html .= '<input type="button" class="button-secondary" value="' . esc_attr__('Clean up all JPG attachments', 'th23-upload') . '" data-action="th23_upload_cleanup" data-nonce="' . esc_attr($nonce) . '" /> ';
+		}
+		$html .= '</div>';
 		$html .= '<p><span class="description">';
-		$html .= esc_html__('Mass add / remove watermark to all JPG images in the media gallery. Please confirm below before clicking above buttons.', 'th23-upload');
+		$html .= esc_html__('Mass add / remove watermark for all JPG images in the media gallery.', 'th23-upload');
+		if(!empty($this->options['watermarks_restore'])) {
+			$html .= ' ' . esc_html__('Or clean up by removing dormant image files left behind after image edits.', 'th23-upload');
+		}
+		$html .= '<br />' . esc_html__('Please confirm below before clicking above buttons.', 'th23-upload');
+		if(!empty($this->options['watermarks_restore'])) {
+			$html .= '<br />' . esc_html__('Warning: Deleting of images during cleanup might cause broken links in case such images have been linked hard coded before!', 'th23-upload');
+		}
 		/* translators: parses in number of images to process */
 		$html .= '<br />' . sprintf(esc_html__('Note: This can take a long time and heavily utilize your server as %d JPG attachments have to processed', 'th23-upload'), count($attachments));
 		$html .= '</span></p>';
@@ -555,7 +613,7 @@ class th23_upload_admin extends th23_upload {
 				'<IfModule mod_rewrite.c>',
 				'RewriteEngine On',
 				'RewriteBase /',
-				'RewriteRule _no-watermark\.(' . implode('|', array_keys($this->plugin['images_types'])) . ')$ - [F,L,NC]',
+				'RewriteRule _(org-upload|no-watermark)\.(' . implode('|', array_keys($this->plugin['images_types'])) . ')$ - [F,L,NC]',
 				'</IfModule>',
 				'# th23 Upload - end',
 			);
@@ -577,9 +635,9 @@ class th23_upload_admin extends th23_upload {
 
 	// == customization: from here on plugin specific ==
 
-	// Load admin related JS and CSS - on plugin settings page (settings_page_th23-upload) and media library (upload.php)
+	// Load admin related JS and CSS - on plugin settings page (settings_page_th23-upload), media library (upload.php) and (attachment) edit page (post.php)
 	function load_admin_js_css($page) {
-		if('settings_page_th23-upload' == $page || 'upload.php' == $page) {
+		if('settings_page_th23-upload' == $page || 'upload.php' == $page || 'post.php' == $page) {
 			wp_enqueue_script('th23-upload-admin-js');
 			wp_enqueue_style('th23-upload-admin-css');
 		}
@@ -599,19 +657,124 @@ class th23_upload_admin extends th23_upload {
 		printf(esc_html__('For watermark setting upon image upload see %s', 'th23-upload'), '<a href="' . esc_url($this->plugin['settings']['base'] . '?page=' . $this->plugin['slug']) . '">' . esc_html($this->plugin['data']['Name'] . ' ' . __('Settings')) . '</a>');
 	}
 
-	// Remove unmarked copy of image upon attachment deletion
-	function delete_unmarked($attachment_id) {
-		if(!empty($watermarks_meta = get_post_meta($attachment_id, 'th23-upload-watermarks', true)) && !empty($watermarks_meta['unmarked'])) {
-			// get watermark dir, url, file
-			$watermark = $this->get_watermark();
-			if(!wp_delete_file($watermark['dir_base'] . $watermarks_meta['unmarked'])) {
-				$this->log('failed to delete unmarked copy upon deletion of image "' . esc_attr($watermark['dir_base'] . $watermarks_meta['unmarked']) . '"', true);
+	// Add restore button for (editable) images on attachment edit screen
+	function restore_attachment($form_fields, $post) {
+		// default restore disabled, handling file attachment
+		if(!empty($this->options['watermarks_restore']) && !empty($attached_file = get_attached_file($post->ID))) {
+			// own backup file exists
+			$source_backup = $this->str_lreplace('.', '_org-upload.', $attached_file);
+			if(is_file($source_backup)) {
+				$form_fields['th23_upload_restore'] = array(
+					'label' => __('Previous version', 'th23-upload'),
+					'input' => 'html',
+					'html' => '<a href="" id="th23-upload-restore" data-img-src="' . esc_attr(add_query_arg(array('action' => 'th23-upload-restore', 'id' => $post->ID, 'nonce' => wp_create_nonce('th23-upload-nonce')), get_admin_url())) . '">' . esc_html__('Restore un-edited original', 'th23-upload') . '</a><div id="th23-upload-restore-select" class="hidden"><img src="" /><input type="button" class="button" id="th23-upload-restore-do" data-nonce="' . esc_attr(wp_create_nonce('th23-upload-nonce')) . '" data-attachment="' . esc_attr($post->ID) . '" value="' . esc_attr__('Restore image', 'th23-upload') . '"></div>',
+				);
 			}
+		}
+		return $form_fields;
+	}
+
+	// Pass through available restore image (aside .htaccess restrictions)
+	function restore_attachment_image() {
+		// restore image requested
+		if(empty($_GET['action']) || 'th23-upload-restore' !== sanitize_text_field(wp_unslash($_GET['action']))) {
+			return;
+		}
+		// check nonce
+		if(empty($_GET['nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['nonce'])), 'th23-upload-nonce')) {
+			die(esc_html__('Invalid request!', 'th23-upload'));
+		}
+		// check user permission
+		if(!current_user_can('edit_posts')) {
+			die(esc_html__('No permission!', 'th23-upload'));
+		}
+		// check attachment id
+		if(empty($_GET['id']) || empty($id = (int) $_GET['id']) || empty($attachment = get_post($id)) || empty($attachment->post_type) || 'attachment' != $attachment->post_type) {
+			die(esc_html__('No valid attachment!', 'th23-upload'));
+		}
+		// get attachment files
+		if(empty($this->options['watermarks_restore']) || empty($attached_file = get_attached_file($attachment->ID)) || !is_file($source_backup = $this->str_lreplace('.', '_org-upload.', $attached_file))) {
+			die(esc_html__('No backup to restore!', 'th23-upload'));
+		}
+		header('Content-type: image/jpeg');
+		readfile($source_backup);
+		exit;
+	}
+
+	// Restore original image (AJAX)
+	function ajax_restore_attachment() {
+		// check nonce
+		if(empty($_POST['nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'th23-upload-nonce')) {
+			$this->ajax_send_response(array('result' => 'error', 'msg' => esc_html__('Invalid request!', 'th23-upload')));
+		}
+		// check user permission
+		if(!current_user_can('edit_posts')) {
+			$this->ajax_send_response(array('result' => 'error', 'msg' => esc_html__('No permission!', 'th23-upload')));
+		}
+		// check attachment id
+		if(empty($_POST['id']) || empty($id = (int) $_POST['id']) || empty($attachment = get_post($id)) || empty($attachment->post_type) || 'attachment' != $attachment->post_type) {
+			$this->ajax_send_response(array('result' => 'error', 'msg' => esc_html__('No valid attachment!', 'th23-upload')));
+		}
+		// get attachment files
+		if(empty($this->options['watermarks_restore']) || empty($attached_file = get_attached_file($attachment->ID)) || !is_file($source_backup = $this->str_lreplace('.', '_org-upload.', $attached_file))) {
+			$this->ajax_send_response(array('result' => 'error', 'msg' => esc_html__('No backup to restore!', 'th23-upload')));
+		}
+		// copy backup to main image file
+		if(empty($filesystem = $this->filesystem()) || !$filesystem->copy($source_backup, $attached_file, true)) {
+			$this->ajax_send_response(array('result' => 'error', 'msg' => esc_html__('Failed to restore original!', 'th23-upload')));
+		}
+		// watermarked?
+		$watermarked = is_file($no_watermark = $this->str_lreplace('.', '_no-watermark.', $attached_file));
+		if($watermarked) {
+			wp_delete_file($no_watermark);
+			delete_post_meta($attachment->ID, 'th23-upload-watermarks');
+		}
+		// re-generate subsizes
+		$attachment_meta = wp_get_attachment_metadata($attachment->ID);
+		$attachment_meta['sizes'] = array();
+		wp_update_attachment_metadata($attachment->ID, $attachment_meta);
+		$attachment_meta = wp_update_image_subsizes($attachment->ID);
+		$this->cleanup($attachment->ID);
+		$response = array('result' => 'success');
+		// re-apply watermark
+		if($watermarked) {
+			// note: requires re-update of returned meta data (not yet done by add_watermark function)
+			$attachment_meta = $this->add_watermark($attachment_meta, $attachment->ID, 'th23-upload');
+			// remove response element from the meta array (it shouldn't be saved)
+			if(!empty($attachment_meta['th23-upload'])) {
+				$response = $attachment_meta['th23-upload'];
+				unset($attachment_meta['th23-upload']);
+			}
+			wp_update_attachment_metadata($attachment->ID, $attachment_meta);
+		}
+		$this->ajax_send_response($response);
+	}
+
+	// Remove unmarked and original copy of image upon attachment deletion
+	function delete_backups($attachment_id) {
+		$attached_file = get_attached_file($attachment_id);
+		if(!empty($attached_file) && is_file($no_watermark = $this->str_lreplace('.', '_no-watermark.', $attached_file)) && !wp_delete_file($no_watermark)) {
+			$this->log('Failed to delete unmarked copy upon deletion of image "/' . esc_attr(str_replace(ABSPATH, '', $no_watermark)) . '"', true);
+		}
+		if(!empty($attached_file) && is_file($org_upload = $this->str_lreplace('.', '_org-upload.', $attached_file)) && !wp_delete_file($org_upload)) {
+			$this->log('Failed to delete original copy upon deletion of image "/' . esc_attr(str_replace(ABSPATH, '', $org_upload)) . '"', true);
 		}
 	}
 
 	// Handle watermarking (AJAX)
-	function ajax_watermark() {
+	function ajax_watermark_upload() {
+		$this->ajax_watermark('upload');
+	}
+	function ajax_watermark_delete() {
+		$this->ajax_watermark('delete');
+	}
+	function ajax_watermark_add() {
+		$this->ajax_watermark('add');
+	}
+	function ajax_watermark_remove() {
+		$this->ajax_watermark('remove');
+	}
+	function ajax_watermark($action = '') {
 
 		// check nonce
 		if(empty($_POST['nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'th23-upload-nonce')) {
@@ -625,7 +788,7 @@ class th23_upload_admin extends th23_upload {
 			'remove' => 'edit_posts',
 		);
 		// check for valid action
-		if(empty($_POST['do']) || empty($action = sanitize_text_field(wp_unslash($_POST['do']))) || empty($perms[$action])) {
+		if(empty($action) || empty($perms[$action])) {
 			$this->ajax_send_response(array('result' => 'error', 'msg' => esc_html__('No valid action!', 'th23-upload')));
 		}
 		// check user permission
@@ -703,7 +866,7 @@ class th23_upload_admin extends th23_upload {
 				unset($attachment_meta['th23-upload']);
 			}
 			else {
-				$response = array('result' => 'success', 'msg' => esc_html__('Watermarked', 'th23-upload'), 'item' => esc_html($attachment_ident), 'do' => 'remove', 'wait' => esc_attr__('Unmarking...', 'th23-upload'), 'html' => esc_html__('Remove watermark', 'th23-upload'));
+				$response = array('result' => 'success', 'msg' => esc_html__('Watermarked', 'th23-upload'), 'item' => esc_html($attachment_ident), 'action' => 'th23_upload_watermark_remove', 'wait' => esc_attr__('Unmarking...', 'th23-upload'), 'html' => esc_html__('Remove watermark', 'th23-upload'));
 			}
 			wp_update_attachment_metadata($attachment_id, $attachment_meta);
 
@@ -727,7 +890,7 @@ class th23_upload_admin extends th23_upload {
 
 			// restore full size
 			if(!empty($watermarks_meta['marked']['full'])) {
-				if(!empty($filesystem = $this->filesystem()) && $filesystem->copy($watermark['dir_base'] . $watermarks_meta['unmarked'], $watermark['dir_base'] . $attachment_meta['file'], true)) {
+				if(!empty($filesystem = $this->filesystem()) && $filesystem->move($watermark['dir_base'] . $watermarks_meta['unmarked'], $watermark['dir_base'] . $attachment_meta['file'], true)) {
 					unset($watermarks_meta['marked']['full']);
 				}
 				else {
@@ -741,13 +904,14 @@ class th23_upload_admin extends th23_upload {
 			// get upload path of subsize images (only saved with full filename in attachment meta array)
 			$upload_path = dirname($attachment_meta['file']) . '/';
 			foreach($watermarks_meta['marked'] as $size => $marked) {
-				if(wp_delete_file($watermark['dir_base'] . $upload_path . $attachment_meta['sizes'][$size]['file'])) {
+				$file = $watermark['dir_base'] . $upload_path . $attachment_meta['sizes'][$size]['file'];
+				if(!is_file($file) || wp_delete_file($file)) {
 					unset($attachment_meta['sizes'][$size]);
 					unset($watermarks_meta['marked'][$size]);
 				}
 				else {
 					$msg = __('Watermark partially removed, see log', 'th23-upload');
-					$this->log('failed to remove watermark from sub-size of attachment ID "' . esc_attr($attachment_id) . '", image "' . esc_attr($upload_path . $attachment_meta['sizes'][$size]['file']) . '"', true);
+					$this->log('Failed to remove watermark from sub-size of attachment ID "' . esc_attr($attachment_id) . '", image "/' . esc_attr(str_replace(ABSPATH, '', $file)) . '"', true);
 				}
 			}
 
@@ -760,7 +924,7 @@ class th23_upload_admin extends th23_upload {
 			wp_update_image_subsizes($attachment_id);
 			remove_filter('wp_get_missing_image_subsizes', array(&$this, 'recreate_image_subsizes'));
 
-			$this->ajax_send_response(array('result' => 'success', 'msg' => esc_html($msg), 'item' => esc_html($attachment_ident), 'do' => 'add', 'wait' => esc_attr__('Watermarking...', 'th23-upload'), 'html' => esc_html__('Add watermark', 'th23-upload')));
+			$this->ajax_send_response(array('result' => 'success', 'msg' => esc_html($msg), 'item' => esc_html($attachment_ident), 'action' => 'th23_upload_watermark_add', 'wait' => esc_attr__('Watermarking...', 'th23-upload'), 'html' => esc_html__('Add watermark', 'th23-upload')));
 
 		}
 
@@ -776,7 +940,8 @@ class th23_upload_admin extends th23_upload {
 		return array_intersect_key($missing_sizes, $this->data['subsizes_removed']);
 	}
 
-	// Media Library: Add remove / add watermark option to attachments on media overview page
+	// Add remove / add watermark option to attachments on Media Library overview page
+	// todo: add filter "All marked/unmarked"
 	// todo: allow for selection of multiple attachments at once and offer mass action (drop-down) for watermarks
 	function add_watermark_actions($actions, $attachment) {
 
@@ -796,18 +961,262 @@ class th23_upload_admin extends th23_upload {
 
 		// unmarked original existing, marked image sizes existing
 		if(!empty($watermarks_meta['unmarked']) && !empty($watermarks_meta['marked'])) {
-			$actions['th23_upload_watermark_remove'] = '<a class="th23-upload-admin-watermark" href="" data-attachment="' . esc_attr($attachment->ID) . '" data-do="remove" data-nonce="' . esc_attr($nonce) . '" data-wait="' . esc_attr__('Unmarking...', 'th23-upload') . '">' . esc_html__('Remove watermark', 'th23-upload') . '</a>';
+			$actions['th23_upload_watermark_remove'] = '<a class="th23-upload-watermark" href="" data-attachment="' . esc_attr($attachment->ID) . '" data-action="th23_upload_watermark_remove" data-nonce="' . esc_attr($nonce) . '" data-wait="' . esc_attr__('Unmarking...', 'th23-upload') . '">' . esc_html__('Remove watermark', 'th23-upload') . '</a>';
 		}
 
 		// watermarks enabled, existing unmarked sizes of the image, where according to settings watermark could be applied
 		// note: adding "full" size placeholder as its in the attachment meta not part of the sizes array
 		$attachment_meta['sizes']['full'] = 'placeholder';
 		if(!empty($this->options['watermarks']) && !empty($this->options['watermarks_image']) && !empty($this->options['watermarks_sizes']) && is_array($this->options['watermarks_sizes']) && (empty($watermarks_meta['marked']) || (is_array($watermarks_meta['marked']) && !empty(array_intersect_key(array_flip($this->options['watermarks_sizes']), array_diff_key($attachment_meta['sizes'], $watermarks_meta['marked'])))))) {
-			$actions['th23_upload_watermark_add'] = '<a class="th23-upload-admin-watermark" href="" data-attachment="' . esc_attr($attachment->ID) . '" data-do="add" data-nonce="' . esc_attr($nonce) . '" data-wait="' . esc_attr__('Watermarking...', 'th23-upload') . '">' . esc_html__('Add watermark', 'th23-upload') . '</a>';
+			$actions['th23_upload_watermark_add'] = '<a class="th23-upload-watermark" href="" data-attachment="' . esc_attr($attachment->ID) . '" data-action="th23_upload_watermark_add" data-nonce="' . esc_attr($nonce) . '" data-wait="' . esc_attr__('Watermarking...', 'th23-upload') . '">' . esc_html__('Add watermark', 'th23-upload') . '</a>';
 		}
 
 		return $actions;
 
+	}
+
+	// Add link to filtered attachments in row actions on posts / pages overview
+	function add_media_link($actions, $post) {
+		$actions[] = '<a href="upload.php?parent=' . esc_attr($post->ID) . '">' . esc_html__('Show Media', 'th23-upload') . '</a>';
+		return $actions;
+	}
+
+	// Filter attachments items to display on specified parent post / page
+	function filter_apply($where) {
+		global $pagenow;
+		if(!empty($pagenow) && 'upload.php' === $pagenow && isset($_REQUEST['parent']) && intval($_REQUEST['parent']) >= 0) {
+			global $wpdb;
+			$where .= ' AND ' . $wpdb->posts . '.post_parent = ' . intval($_REQUEST['parent']);
+		}
+		return $where;
+	}
+
+	// Add selection dropdown for parent filter in media library
+	function filter_show() {
+		global $pagenow;
+		if(empty($pagenow) || $pagenow !== 'upload.php') {
+			return;
+		}
+
+		// get all posts / pages with attachments
+		if(empty($options = wp_cache_get('th23_upload_media_options'))) {
+			global $wpdb;
+			$parents = $wpdb->get_results('SELECT a.ID, a.post_title, (SELECT COUNT(ID) FROM ' . $wpdb->posts . ' WHERE post_type = "attachment" AND post_parent = a.ID) AS attachment_count FROM ' . $wpdb->posts . ' a WHERE (post_type = "post" OR post_type = "page") AND (post_status = "publish" OR post_status = "draft" OR post_status = "pending") HAVING attachment_count > 0 ORDER BY a.post_title ASC');
+			$options = array(
+				-1 => __('All parents', 'th23-upload'),
+				0 => __('(Unattached)', 'th23-upload'),
+			);
+			foreach($parents as $parent) {
+				$options[$parent->ID] = $parent->post_title;
+			}
+			wp_cache_set('th23_upload_media_options', $options);
+		}
+
+		// build dropdown
+		echo '<select id="filter-by-parent" name="parent">';
+		$selected_id = (isset($_REQUEST['parent'])) ? intval($_REQUEST['parent']) : -1;
+		foreach($options as $id => $title) {
+			echo '<option value="' . esc_attr($id) . '"' . (($selected_id == $id) ? ' selected="selected"' : '') . '>' . esc_attr($title) . '</option>';
+		}
+		echo '</select>';
+
+	}
+
+	// Reset cache for selection dropdown for parent filter in media library
+	function filter_cache($post_id, $post_after, $post_before) {
+		// no attachment
+		if(empty($post_after->post_type) || 'attachment' !== $post_after->post_type) {
+			return;
+		}
+		// undefined = unattached (0)
+		$parent_after = (!empty($post_after->post_parent)) ? $post_after->post_parent : 0;
+		$parent_before = (!empty($post_before->post_parent)) ? $post_before->post_parent : 0;
+		if($parent_after != $parent_before) {
+			wp_cache_delete('th23_upload_media_options');
+		}
+	}
+
+	// Adjust standard "Uploaded to" column in media library
+	// note: requires full rebuilding of the column as default columns content can not be altered by filtering (these columns are not passed through the "manage_media_custom_column" filter)
+	function media_columns($default) {
+		$columns = array();
+		// note: loop through and re-build array to change key and value without changing order of columns
+		foreach($default as $key => $value) {
+			if('parent' === $key) {
+				$key = 'attached_to';
+				$value = __('Attached to', 'th23-upload');
+			}
+			$columns[$key] = $value;
+		}
+		$columns['filesize'] = __('Filesize', 'th23-upload');
+		return $columns;
+	}
+	function media_columns_sortable($columns) {
+		$columns['attached_to'] = 'attached_to';
+		return $columns;
+	}
+	function media_columns_orderby($vars) {
+		if(isset($vars['orderby']) && 'attached_to' === $vars['orderby']) {
+			$vars['orderby'] = 'parent';
+		}
+		return $vars;
+	}
+	function media_columns_content($column, $id) {
+		if(empty($column)) {
+			return;
+		}
+		if('attached_to' === $column) {
+
+			$parent_id = (int) get_post_field('post_parent', $id, 'raw');
+			// already attached
+			if(!empty($parent_id)) {
+				if(!empty($url = get_edit_post_link($parent_id))) {
+					echo '<strong><a href="' . esc_url($url) . '">' . esc_html(_draft_or_post_title($parent_id)) . '</a></strong>';
+				}
+				else {
+					echo '<strong>' . esc_html(_draft_or_post_title($parent_id)) . '</strong>';
+				}
+				echo '<p>' . esc_html(get_the_time(__('Y/m/d'), $parent_id)) . '</p>';
+				echo '<div class="row-actions">';
+				if(current_user_can('edit_post', $id)) {
+					echo '<a class="hide-if-no-js" onclick="findPosts.open(\'media[]\',\'' . intval($id) . '\'); return false;" href="#the-list">' . esc_html__('Re-attach', 'th23-upload') . '</a>';
+					echo ' | ';
+					echo '<a href="' . esc_url('upload.php?parent_post_id=' . $parent_id . '&media[]=' . $id . '&_wpnonce=' . wp_create_nonce('bulk-media')) . '">' . esc_html__('Detach', 'th23-upload') . '</a>';
+					echo ' | ';
+				}
+				echo '<a href="' . esc_url('upload.php?parent=' . $parent_id) . '">' . esc_html__('Show all attached', 'th23-upload') . '</a>';
+				echo '</div>';
+			}
+			// currently un-attached
+			else {
+				echo esc_html__('(Unattached)', 'th23-upload');
+				echo '<p>&nbsp;</p>';
+				echo '<div class="row-actions">';
+				if(current_user_can('edit_post', $id)) {
+					echo '<a class="hide-if-no-js" onclick="findPosts.open(\'media[]\',\'' . intval($id) . '\'); return false;" href="#the-list">' . esc_html__('Attach', 'th23-upload') . '</a>';
+					echo ' | ';
+				}
+				echo '<a href="upload.php?parent=0">' . esc_html__('Show all unattached', 'th23-upload') . '</a>';
+				echo '</div>';
+			}
+
+		}
+		elseif('filesize' === $column) {
+
+			// get total filesize from cache - or check filesizes on disk
+			if(empty($filesize_sum = get_post_meta($id, 'th23-upload-filesize', true))) {
+				$filesize_sum = $this->filesize_disk($id);
+			}
+			echo '<span class="th23-upload-filesize-field">' . esc_html($filesize_sum) . '</span>';
+			if(current_user_can('edit_posts')) {
+				echo '<p>&nbsp;</p>';
+				echo '<div class="row-actions">';
+				echo '<a class="th23-upload-filesize" href="" data-action="th23_upload_filesize" data-attachment="' . esc_attr($id) . '" data-nonce="' . esc_attr(wp_create_nonce('th23-upload-nonce')) . '" data-wait="' . esc_attr__('Calculating...', 'th23-upload') . '">' . esc_html__('Refresh', 'th23-upload') . '</a>';
+				if(!empty($this->options['watermarks_restore'])) {
+					echo ' | ';
+					echo '<a class="th23-upload-cleanup" href="" data-action="th23_upload_cleanup" data-attachment="' . esc_attr($id) . '" data-nonce="' . esc_attr(wp_create_nonce('th23-upload-nonce')) . '" data-wait="' . esc_attr__('Checking...', 'th23-upload') . '">' . esc_html__('Clean up', 'th23-upload') . '</a>';
+				}
+				echo '</div>';
+			}
+
+		}
+
+	}
+
+	// Invalidate filesize cache upon change of attachment meta data
+	function filesize_cache($meta_id, $object_id, $meta_key) {
+		if(in_array($meta_key, array('_wp_attachment_metadata', '_wp_attachment_backup_sizes', 'th23-upload-watermarks'))) {
+			delete_post_meta($object_id, 'th23-upload-filesize');
+		}
+	}
+
+	// Handle refresh filesize, cleanup images (AJAX)
+	function ajax_filesize_cleanup($action = 'filesize') {
+		// check nonce
+		if(empty($_POST['nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'th23-upload-nonce')) {
+			$this->ajax_send_response(array('item' => esc_html__('n/a', 'th23-upload'), 'result' => 'error', 'msg' => esc_html__('Invalid request!', 'th23-upload')));
+		}
+		// check user permission
+		if(!current_user_can('edit_posts')) {
+			$this->ajax_send_response(array('item' => esc_html__('n/a', 'th23-upload'), 'result' => 'error', 'msg' => esc_html__('No permission!', 'th23-upload')));
+		}
+		// check attachment id
+		if(empty($_POST['id']) || empty($id = (int) $_POST['id']) || empty($attachment = get_post($id)) || empty($attachment->post_type) || 'attachment' != $attachment->post_type) {
+			$this->ajax_send_response(array('item' => esc_html__('n/a', 'th23-upload'), 'result' => 'error', 'msg' => esc_html__('No valid attachment!', 'th23-upload')));
+		}
+		$attachment_ident = $attachment->post_title . ' (' . $id . ')';
+		// clean up
+		if('cleanup' == $action) {
+			if(empty($this->options['watermarks_restore'])) {
+				$this->ajax_send_response(array('item' => esc_html($attachment_ident), 'result' => 'error', 'msg' => esc_html__('Not possible!', 'th23-upload')));
+			}
+			$this->cleanup($id);
+			$msg = __('Done', 'th23-upload');
+			$wait = __('Checking...', 'th23-upload');
+			$html = __('Clean up', 'th23-upload');
+		}
+		else {
+			$msg = __('Updated', 'th23-upload');
+			$wait = __('Calculating...', 'th23-upload');
+			$html = __('Refresh', 'th23-upload');
+		}
+		// re-assess filesize on disk
+		$filesize_sum = $this->filesize_disk($id);
+		// update filesizes shown in media gallery
+		$this->ajax_send_response(array(
+			'item' => esc_html($attachment_ident),
+			'result' => 'success',
+			'msg' => esc_html($msg),
+			'size' => esc_html($filesize_sum),
+			'wait' => esc_attr($wait),
+			'html' => esc_html($html),
+		));
+	}
+
+	// Check attachment filesizes on disk
+	function filesize_disk($attachment_id) {
+		$filesize_sum = 0;
+		$attachment_meta = wp_get_attachment_metadata($attachment_id, true);
+		if(!empty($filesystem = $this->filesystem()) && !empty($attachment_meta['file'])) {
+			$watermark = $this->get_watermark();
+			// get attachment file path and basename (excl ".EXT")
+			$path = $watermark['dir_base'] . dirname($attachment_meta['file']) . '/';
+			$file_name = basename($attachment_meta['file']);
+			// create filename => image size array
+			$sizes = array();
+			if(isset($attachment_meta['sizes']) && is_array($attachment_meta['sizes'])) {
+				foreach($attachment_meta['sizes'] as $size => $data) {
+					if(!empty($data['file'])) {
+						$sizes[$path . $data['file']] = $size;
+					}
+				}
+			}
+			// get all files with same basename in folder
+			// note: this will give an accurate number for overall filesize, including "dormant" image files and backups
+			if(!empty($files = glob($path . substr($file_name, 0, strrpos($file_name, '.')) . '*'))) {
+				foreach($files as $file) {
+					$filesize = (int) $filesystem->size($file);
+					if($path . $file_name == $file) {
+						$attachment_meta['filesize'] = $filesize;
+					}
+					elseif(!empty($sizes[$file])) {
+						$attachment_meta['sizes'][$sizes[$file]]['filesize'] = $filesize;
+					}
+					$filesize_sum += $filesize;
+				}
+			}
+			// update attachment meta filesizes
+			wp_update_attachment_metadata($attachment_id, $attachment_meta);
+		}
+		// format and cache
+		$filesize_sum = size_format($filesize_sum);
+		update_post_meta($attachment_id, 'th23-upload-filesize', $filesize_sum);
+		return $filesize_sum;
+	}
+
+	// Pass-through cleanup (AJAX)
+	function ajax_cleanup() {
+		$this->ajax_filesize_cleanup('cleanup');
 	}
 
 }
